@@ -42,7 +42,12 @@ public class Exercise9Test extends ClassicOnlineStore {
          * The collector will be used by serial stream.
          */
         Supplier<Object> supplier = () -> new StringJoiner(",");
-        Collector<String, ?, String> toCsv = null;
+        Collector<String, StringJoiner, String> toCsv = new CollectorImpl<>(
+                () -> new StringJoiner(","),
+                StringJoiner::add,
+                StringJoiner::merge,
+                StringJoiner::toString,
+                Collections.emptySet());
         String nameAsCsv = customerList.stream().map(Customer::getName).collect(toCsv);
         assertThat(nameAsCsv, is("Joe,Steven,Patrick,Diana,Chris,Kathy,Alice,Andrew,Martin,Amy"));
     }
@@ -60,7 +65,18 @@ public class Exercise9Test extends ClassicOnlineStore {
 
 
 
-        Collector<Customer, ?, Map<String, Set<String>>> toItemAsKey = null;
+        Supplier<Map<String, Set<String>>> mapSupplier = HashMap::new;
+        BiConsumer<Map<String, Set<String>>, Customer> accumulator = (map, customer) ->
+                customer.getWantToBuy().forEach(item ->
+                        map.computeIfAbsent(item.getName(), k -> new HashSet<>()).add(customer.getName()));
+        BinaryOperator<Map<String, Set<String>>> combiner = (left, right) -> {
+            right.forEach((key, names) ->
+                    left.computeIfAbsent(key, k -> new HashSet<>()).addAll(names));
+            return left;
+        };
+        Collector<Customer, Map<String, Set<String>>, Map<String, Set<String>>> toItemAsKey =
+                new CollectorImpl<>(mapSupplier, accumulator, combiner, Function.identity(),
+                        EnumSet.of(Collector.Characteristics.IDENTITY_FINISH));
         Map<String, Set<String>> itemMap =
                 customerList.stream().parallel().collect(toItemAsKey);
 
